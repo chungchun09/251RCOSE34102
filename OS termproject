@@ -1,0 +1,82 @@
+#include <stdio.h>
+#include <stdlib.h>
+#include <time.h>
+#include <conio.h>
+
+#define MAX_PROCESS 100
+
+typedef structure{
+    int PID
+    int Arrivla_Time
+    int CPU_Burst_Time
+    int IO_Request_Time
+    int IO_Burst_Time
+    int Priority
+}Process;
+
+void CREATE_PROCESS(Process *p, int PID){
+    P-> PID = PID;
+    P-> Arrivla_Time = rand() % 11; //도착 시간을 0 ~ 10 사이로 설정
+    P-> CPU_Burst_Time = rand() % 20 + 1; // CPU burst time을 1 ~ 20 사이로 설정
+    P-> Priority = rand();
+    // P-> IO_Burst_Time = 
+    // P-> IO_Request_Time = 
+}
+
+CONFIG(){
+
+}
+
+void FCFS(){
+
+}
+
+void SJF(){
+
+}
+
+void PRIORITY(){
+
+}
+
+void RR(){
+
+
+}
+
+void PREEMPTIVE_SJF(){
+
+}
+
+void PREEMPTIVE_PRIORITY(){
+
+}
+
+
+
+int main(){
+    Process process_list[MAX_PROCESS];
+    int num_processes = 0;
+
+    while(true){
+        if(kbhit()){ // 키보드 입력이 있는 지 확인
+            char ch = getch();
+
+            if(ch == 27){ // esc가 ascii코드로 27 | esc를 누르면 탈출
+                break;
+            }
+            else if(chat == " "){ // 스페이스바를 입력할 경우 프로세스 생성
+                if(num_processes < MAX_PROCESS){
+                    CREATE_PROCESS(&process_list[num_processes], num_processes + 1);
+                    num_processes ++;
+                }else{
+                    break;
+                }
+            }
+        }
+    }
+
+    return 0;
+}
+
+
