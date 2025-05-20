@@ -1,82 +1,313 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <time.h>
-#include <conio.h>
 
 #define MAX_PROCESS 100
+#define MAX_QUEUE 100
 
-typedef structure{
-    int PID
-    int Arrivla_Time
-    int CPU_Burst_Time
-    int IO_Request_Time
-    int IO_Burst_Time
-    int Priority
+typedef struct{
+    int PID;
+    int Arrival_time;
+    int CPU_burst_time;
+    int IO_request_time;
+    int IO_burst_time;
+    int Priority;
+
+    int Remaing_time;
+    int Start_time;
+    int Completion_time;
+    int Waiting_time;
+    int Turnaround_time;
 }Process;
 
-void CREATE_PROCESS(Process *p, int PID){
-    P-> PID = PID;
-    P-> Arrivla_Time = rand() % 11; //도착 시간을 0 ~ 10 사이로 설정
-    P-> CPU_Burst_Time = rand() % 20 + 1; // CPU burst time을 1 ~ 20 사이로 설정
-    P-> Priority = rand();
-    // P-> IO_Burst_Time = 
-    // P-> IO_Request_Time = 
+typedef struct{
+    Process data[MAX_QUEUE];
+    int head;
+    int tail;
+}Queue;
+
+void Init_queue(Queue *q){
+    q->head = q->tail = 0;
 }
 
-CONFIG(){
+int is_empty(Queue *q){
+    return q->head == q->tail;
+}
+
+int is_full(Queue *q){
+    return (q->tail + 1) % MAX_QUEUE == q->head;
+}
+
+void Enqueue(Queue *q, Process p){
+    if(is_full(q)){
+        printf("Queue is full.");
+        return;
+    }
+
+    q->data[q->tail] = p;
+    q->tail = (q->tail + 1) % MAX_QUEUE;
+}
+
+Process Dequeue(Queue * q){
+    Process dummy = {0};
+
+    if(is_empty(q)){
+        printf("Queue is empty.");
+        return dummy;
+    }
+
+    Process p = q->data[q->head];
+    q->head = (q->head + 1) % MAX_QUEUE;
+
+    return p;
+}
+
+void Config(Queue *Ready_queue, Queue * Waiting_queue){
+    Init_queue(Ready_queue);
+    Init_queue(Waiting_queue);
+    
+    printf("Ready queue and Waiting queue initialized.\n");
+}
+
+void Create_process(Process *p, int pid){
+    p->PID = pid;
+    p->Arrival_time = rand() % 11; //도착 시간을 0 ~ 10 사이로 설정.
+    p->CPU_burst_time = rand() % 20 + 1; //CPU Burst time을 1 ~ 20 사이로 설정.
+    p->Priority = rand() % 10 + 1; // 우선순위는 랜덤으로 설정.
+
+    //p->IO_burst_time = ;
+    //p->IO_request_time = ;
+
+    printf("Process %d\n", pid);
+    printf("Arrival time: %d, CPU Brust time: %d, Priority: %d\n", p->Arrival_time, p->CPU_burst_time, p->Priority); // 생성된 프로세스의 PID, Arrival time, CPU Brust time, Priority 등을 출력함.
+}
+
+int whoisfront(const void *a, const void *b){ 
+    Process *p1 = (Process *)a;
+    Process *p2 = (Process *)b;
+
+    return p1->Arrival_time - p2->Arrival_time; // process 두 개의 arrival time을 이용해 순서를 정함.(양수면 a가 b보다 뒤. 음수면 b가 a보다 뒤.)
+}
+
+void FCFS(Queue *Ready_queue, int num_processes){
+    qsort(Ready_queue, num_processes, sizeof(Process), whoisfront); // arrival time을 기준으로 정렬함.
+
+    int current_time = 0;
+    int total_waiting_time = 0;
+    int total_turnaround_time = 0;
+    int temp_num_processes = num_processes;
+
+    printf("FCFS is starting.\n");
+
+    printf("Gantt chat:\n");
+    while(!is_empty(Ready_queue)){
+        Process p = Dequeue(Ready_queue);
+        temp_num_processes--;
+
+        if(p.Arrival_time > current_time){
+            current_time += p.Arrival_time - current_time;
+            printf("| Pidle (%d) |", current_time);
+        } // 만약 현재 시간이 process[i]가 도착한 시간보다 이른 경우 idle한 상태의 시간을 더함.
+        
+        p.Start_time = current_time; // process[i]의 시작 시간.
+        p.Completion_time = current_time + p.CPU_burst_time; // process[i]의 실행 완료 시간.
+        p.Turnaround_time = p.Completion_time - p.Arrival_time; // process[i]의 총 실행 시간.
+        p.Waiting_time = p.Start_time - p.Arrival_time; // process[i]의 대기 시간.
+
+        total_turnaround_time += p.Turnaround_time;
+        total_waiting_time += p.Waiting_time;
+
+        current_time = p.Completion_time;
+        
+        printf("| P%d (%d) |", p.PID, p.Completion_time);
+    }
+
+    printf("\n");
+    printf("Average Waiting Time is %f\n", (float)total_waiting_time / num_processes);
+    printf("Average Turnaround Time is %f\n", (float)total_turnaround_time / num_processes);
+    printf("FCFS has finished.\n");
+    printf("\n");
 
 }
 
-void FCFS(){
-
+void remove_from_list(Process *Ready_list, int *count, int index){
+    for(int i = index; i < (*count) - 1; i++){
+        Ready_list[i] = Ready_list[i+1];
+    }
+    (*count)--;
 }
 
-void SJF(){
+void SJF(Queue *Ready_queue, int num_processes){
+    Process Ready_list[MAX_PROCESS];
 
-}
+    qsort(Ready_queue, num_processes, sizeof(Process), whoisfront); // arrival time을 기준으로 정렬함.
 
-void PRIORITY(){
+    int total_waiting_time = 0;
+    int total_turnaround_time = 0;
+    int current_time = 0;
 
-}
+    int temp_num_processes = num_processes;
+    int count = 0;
 
-void RR(){
+    printf("SJF is starting.\n");
+    printf("Gantt chart: \n");
+    
+    for(int i = Ready_queue->head; i != Ready_queue->tail; i = (i+1) % MAX_QUEUE){
+        Ready_list[count] = Ready_queue->data[i];
+        count++;
+    } // ready queue를 list로 치환함.
 
+    int idle_time = 0;
+    while(count > 0){
+        int shortest_idx = -1;
+        int shortest_time = 100;
 
-}
-
-void PREEMPTIVE_SJF(){
-
-}
-
-void PREEMPTIVE_PRIORITY(){
-
-}
-
-
-
-int main(){
-    Process process_list[MAX_PROCESS];
-    int num_processes = 0;
-
-    while(true){
-        if(kbhit()){ // 키보드 입력이 있는 지 확인
-            char ch = getch();
-
-            if(ch == 27){ // esc가 ascii코드로 27 | esc를 누르면 탈출
-                break;
-            }
-            else if(chat == " "){ // 스페이스바를 입력할 경우 프로세스 생성
-                if(num_processes < MAX_PROCESS){
-                    CREATE_PROCESS(&process_list[num_processes], num_processes + 1);
-                    num_processes ++;
-                }else{
-                    break;
-                }
+        for(int i = 0; i < count; i++){
+            if(Ready_list[i].Arrival_time <= current_time && Ready_list[i].CPU_burst_time < shortest_time){ // Ready list를 돌면서 만약 current time보다 작으면 실행하지 않은 프로세스 중에서 cpu burst time이 적은 프로세스를 찾음.
+                shortest_idx = i;
+                shortest_time = Ready_list[i].CPU_burst_time;
             }
         }
+        
+        if(shortest_idx == -1){ // Current time 때 아직 도착한 프로세스가 존재하지 않음.
+            idle_time++;
+            current_time++;
+            continue;
+        }else if(shortest_idx > -1 && idle_time > 0){ // Current time 때 cpu burst time이 작은 실행 가능한 프로세스를 찾음.
+            idle_time = 0;
+            printf("| Pidle (%d) |", current_time);
+        }  // idle time 처리.
+
+        Process p = Ready_list[shortest_idx];
+
+        p.Start_time = current_time; // process[i]의 시작 시간.
+        p.Completion_time = current_time + p.CPU_burst_time; // process[i]의 실행 완료 시간.
+        p.Turnaround_time = p.Completion_time - p.Arrival_time; // process[i]의 총 실행 시간.
+        p.Waiting_time = p.Start_time - p.Arrival_time; // process[i]의 대기 시간.
+
+        total_turnaround_time += p.Turnaround_time;
+        total_waiting_time += p.Waiting_time;
+
+        current_time = p.Completion_time;
+
+        remove_from_list(Ready_list, &count, shortest_idx);
+
+        printf("| P%d (%d) |", p.PID, p.Completion_time);
+
     }
+
+    printf("\n");
+    printf("Average Waiting Time is %f\n", (float)total_waiting_time / num_processes);
+    printf("Average Turnaround Time is %f\n", (float)total_turnaround_time / num_processes);
+    printf("SJF has finished.\n");
+    printf("\n");
+}
+
+void Priority(Queue *Ready_queue, int num_processes){
+    Process Ready_list[MAX_PROCESS];
+
+    qsort(Ready_queue, num_processes, sizeof(Process), whoisfront); // arrival time을 기준으로 정렬함.
+
+    int total_waiting_time = 0;
+    int total_turnaround_time = 0;
+    int current_time = 0;
+
+    int temp_num_processes = num_processes;
+    int count = 0;
+
+    printf("Priority is starting.\n");
+    printf("Gantt chart: \n");
+    
+    for(int i = Ready_queue->head; i != Ready_queue->tail; i = (i+1) % MAX_QUEUE){
+        Ready_list[count] = Ready_queue->data[i];
+        count++;
+    } // ready queue를 list로 치환함.
+
+    int idle_time = 0;
+    while(count > 0){
+        int highest_idx = -1;
+        int highest_priority = 0;
+
+        for(int i = 0; i < count; i++){
+            if(Ready_list[i].Arrival_time <= current_time && Ready_list[i].Priority > highest_priority){ // Ready list를 돌면서 만약 current time보다 작으면 실행하지 않은 프로세스 중에서 priority가 큰 프로세스를 찾음.
+                highest_idx = i;
+                highest_priority = Ready_list[i].Priority;
+            }
+        }
+        
+        if(highest_idx == -1){ // Current time 때 아직 도착한 프로세스가 존재하지 않음.
+            idle_time++;
+            current_time++;
+            continue;
+        }else if(highest_idx > -1 && idle_time > 0){ // Current time 때 priority가 큰 실행 가능한 프로세스를 찾음.
+            idle_time = 0;
+            printf("| Pidle (%d) |", current_time);
+        }  // idle time 처리.
+
+        Process p = Ready_list[highest_idx];
+
+        p.Start_time = current_time; // process[i]의 시작 시간.
+        p.Completion_time = current_time + p.CPU_burst_time; // process[i]의 실행 완료 시간.
+        p.Turnaround_time = p.Completion_time - p.Arrival_time; // process[i]의 총 실행 시간.
+        p.Waiting_time = p.Start_time - p.Arrival_time; // process[i]의 대기 시간.
+
+        total_turnaround_time += p.Turnaround_time;
+        total_waiting_time += p.Waiting_time;
+
+        current_time = p.Completion_time;
+
+        remove_from_list(Ready_list, &count, highest_idx);
+
+        printf("| P%d (%d) |", p.PID, p.Completion_time);
+
+    }
+
+    printf("\n");
+    printf("Average Waiting Time is %f\n", (float)total_waiting_time / num_processes);
+    printf("Average Turnaround Time is %f\n", (float)total_turnaround_time / num_processes);
+    printf("Priority has finished.\n");
+    printf("\n");
+}
+
+RR(){
+
+}
+
+int main(){
+    srand(time(NULL));
+
+    Process processes[MAX_PROCESS];
+    Queue Ready_queue, Waiting_queue;
+    int num_processes;
+
+    Config(&Ready_queue, &Waiting_queue);
+
+    printf("How many process would you like to create? (Maximum %d)", MAX_PROCESS);
+    scanf("%d", &num_processes); // 생성할 프로세스 갯수 입력.
+    printf("\n");
+
+    for(int i = 0; i < num_processes; i++){
+        Create_process(&processes[i], i+1);
+        Enqueue(&Ready_queue, processes[i]);
+    }
+
+    printf("All processes created!\n");
+    printf("\n");
+
+    FCFS(&Ready_queue, num_processes);
+
+    Init_queue(&Ready_queue);
+    for(int i = 0; i < num_processes; i++){
+        Enqueue(&Ready_queue, processes[i]);
+    }
+    SJF(&Ready_queue, num_processes);
+
+    Priority(&Ready_queue, num_processes);
+
+    int time_quantum;
+    printf("Input time quantum: ");
+    scanf("%d", &time_quantum);
+    RR();
 
     return 0;
 }
-
-
