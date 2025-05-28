@@ -18,6 +18,9 @@ typedef struct{
     int Completion_time;
     int Waiting_time;
     int Turnaround_time;
+
+    int Last_excuted_time;
+    int Insert;
 }Process;
 
 typedef struct{
@@ -74,12 +77,17 @@ void Create_process(Process *p, int pid){
     p->Arrival_time = rand() % 11; //도착 시간을 0 ~ 10 사이로 설정.
     p->CPU_burst_time = rand() % 20 + 1; //CPU Burst time을 1 ~ 20 사이로 설정.
     p->Priority = rand() % 10 + 1; // 우선순위는 랜덤으로 설정.
-
-    //p->IO_burst_time = ;
-    //p->IO_request_time = ;
+    
+    p->Last_excuted_time = p->Arrival_time;
+    p->Remaing_time = p->CPU_burst_time;
+    p->Insert = 0;
+    
+    p->IO_burst_time = rand() % 21;
+    p->IO_request_time = rand() % 10 + 1;
 
     printf("Process %d\n", pid);
-    printf("Arrival time: %d, CPU Brust time: %d, Priority: %d\n", p->Arrival_time, p->CPU_burst_time, p->Priority); // 생성된 프로세스의 PID, Arrival time, CPU Brust time, Priority 등을 출력함.
+    printf("Arrival time: %d, CPU Burst time: %d, Priority: %d, IO burst time: %d, IO request time: %d\n", p->Arrival_time, p->CPU_burst_time, p->Priority, p->IO_burst_time, p->IO_request_time); 
+    // 생성된 프로세스의 PID, Arrival time, CPU Brust time, Priority 등을 출력함.
 }
 
 int whoisfront(const void *a, const void *b){ 
@@ -211,7 +219,6 @@ void Priority(Queue *Ready_queue, int num_processes){
     int total_waiting_time = 0;
     int total_turnaround_time = 0;
     int current_time = 0;
-
     int temp_num_processes = num_processes;
     int count = 0;
 
@@ -269,8 +276,252 @@ void Priority(Queue *Ready_queue, int num_processes){
     printf("\n");
 }
 
-RR(){
+void whocaninsert(Queue *Ready_queue, Process *processes_list, int current_time, int num_processes, int *count){
+    for(int i = 0; i < num_processes; i++){
+        if(current_time >= processes_list[i].Arrival_time && processes_list[i].Insert == 0){
+            Enqueue(Ready_queue, processes_list[i]);
+            processes_list[i].Insert = 1;
+            (*count)++;
+        }
+    }
+}
 
+void RR(Queue *Ready_queue, Process *processes_list, int num_processes, int time_quantum){
+    int current_time = 0;
+    int idle_time = 0;
+    int total_turnaround_time = 0;
+    int total_waiting_time = 0;
+    int count = 0;
+    int working_pid = 0;
+
+    printf("RR is starting.\n");
+    printf("Gantt chart: \n");
+
+    while(!is_empty(Ready_queue) || count != num_processes){ // Ready queue 와 processes list가 다 비어야 종료.
+
+        whocaninsert(Ready_queue, processes_list, current_time, num_processes, &count); // current time 때 삽입 가능한 프로세스가 있는 지 확인함.
+
+        if(is_empty(Ready_queue)){ // Ready queue가 비어있다는 것은 idle하다.
+            current_time++;
+            idle_time++;
+            continue;
+        }else{
+            int head = Ready_queue->head;
+
+            if(working_pid != Ready_queue->data[head].PID){ // working pid가 ready queue head의 pid와 다를 경우 이제 프로세스가 바뀌었다는 것을 의미함.
+                if(working_pid > 0){
+                    printf("| P%d (%d) |", working_pid, current_time);
+                    working_pid = Ready_queue->data[head].PID;
+                }else if(idle_time > 0){
+                    printf("| Pidle (%d) |", current_time);
+                    idle_time = 0;
+                }
+            }
+
+            if(Ready_queue->data[head].Remaing_time <= time_quantum){ // cpu burst time이 time quantum보다 적게 남았을 경우.
+                Ready_queue->data[head].Start_time = current_time;
+                Ready_queue->data[head].Waiting_time += Ready_queue->data[head].Start_time - Ready_queue->data[head].Last_excuted_time;
+                
+                current_time += Ready_queue->data[head].Remaing_time;
+                Ready_queue->data[head].Remaing_time = 0;
+                
+                Ready_queue->data[head].Turnaround_time = current_time - Ready_queue->data[head].Arrival_time;
+
+                total_turnaround_time += Ready_queue->data[head].Turnaround_time;
+                total_waiting_time += Ready_queue->data[head].Waiting_time;
+
+                printf("| P%d (%d) |", Ready_queue->data[head].PID, current_time);
+
+                working_pid = 0;
+
+                Dequeue(Ready_queue);
+            }else{ // cpu burst time이 time quantum보다 많이 남았을 경우.
+                Ready_queue->data[head].Start_time = current_time;
+                Ready_queue->data[head].Waiting_time += Ready_queue->data[head].Start_time - Ready_queue->data[head].Last_excuted_time;
+                
+                current_time += time_quantum;
+                
+                Ready_queue->data[head].Last_excuted_time = current_time;
+                Ready_queue->data[head].Remaing_time -= time_quantum;
+
+                Process temp_p = Dequeue(Ready_queue);
+                Enqueue(Ready_queue, temp_p);
+
+                working_pid = Ready_queue->data[head].PID;
+            }
+        }
+    }
+
+    printf("\n");
+    printf("Average Waiting Time is %f\n", (float)total_waiting_time / num_processes);
+    printf("Average Turnaround Time is %f\n", (float)total_turnaround_time / num_processes);
+    printf("RR has finished.\n");
+    printf("\n");
+}
+
+int is_empty_list(Process *processes, int num_processes){
+    int count = 0;
+    for(int i = 0; i < num_processes; i++){
+        if(processes[i].Insert == 0){
+            return 0;
+        }
+    }
+    return 1;
+}
+
+void whocaninsert_list(Process *Ready_list, Process *processes, int num_processes, int current_time, int *count){
+    for(int i = 0; i < num_processes; i++){
+        if(processes[i].Arrival_time <= current_time && processes[i].Insert == 0){
+            Ready_list[*count] = processes[i];
+            processes[i].Insert = 1;
+            (*count)++;
+        }
+    }
+}
+
+void SJFwithPreemptive(Process *processes, int num_processes, int time_quantum){
+    Process Ready_list[MAX_PROCESS];
+    
+    int current_time = 0;
+    int total_turnaround_time = 0;
+    int total_waiting_time = 0;
+    int working_pid = 0;
+    int idle_time = 0;
+    int count = 0;
+
+    printf("SJF with Preemptive is starting.\n");
+    printf("Gantt chart: \n");
+    
+    while(count > 0 || !is_empty_list(processes, num_processes)){
+        int shortest_idx = -1;
+        int shortest_burst_time = 100;
+
+        whocaninsert_list(Ready_list, processes, num_processes, current_time, &count);
+
+        if(count == 0){
+            current_time++;
+            idle_time++;
+            working_pid = 0;
+            continue;
+        }else{
+            for(int i = 0; i < count; i++){
+                if(Ready_list[i].Remaing_time < shortest_burst_time){
+                    shortest_idx = i;
+                    shortest_burst_time = Ready_list[i].Remaing_time;
+                }
+            }
+
+            if(idle_time > 0){
+                printf("| Pidle (%d) |", current_time);
+                idle_time = 0;
+                working_pid = 0;
+            }
+            
+            if(Ready_list[shortest_idx].Remaing_time == 1){
+                Ready_list[shortest_idx].Remaing_time--;
+                Ready_list[shortest_idx].Waiting_time += current_time - Ready_list[shortest_idx].Last_excuted_time;
+                current_time++;
+                Ready_list[shortest_idx].Turnaround_time = current_time - Ready_list[shortest_idx].Arrival_time;
+
+                total_turnaround_time += Ready_list[shortest_idx].Turnaround_time;
+                total_waiting_time += Ready_list[shortest_idx].Waiting_time;
+
+                printf("| P%d (%d) |", Ready_list[shortest_idx].PID, current_time);
+                
+                working_pid = 0;
+
+                remove_from_list(Ready_list, &count, shortest_idx);
+            }else{
+                if(working_pid != Ready_list[shortest_idx].PID && working_pid != 0){
+                    printf("| P%d (%d) |", working_pid, current_time);
+                }
+                Ready_list[shortest_idx].Remaing_time--;
+                Ready_list[shortest_idx].Waiting_time += current_time - Ready_list[shortest_idx].Last_excuted_time;
+                current_time++;
+                Ready_list[shortest_idx].Last_excuted_time = current_time;
+                working_pid = Ready_list[shortest_idx].PID;
+            }
+        }
+    }
+
+    printf("\n");
+    printf("Average Waiting Time is %f\n", (float)total_waiting_time / num_processes);
+    printf("Average Turnaround Time is %f\n", (float)total_turnaround_time / num_processes);
+    printf("SJF with Preemptive has finished.\n");
+    printf("\n");    
+}
+
+void PrioritywithPreemptive(Process *processes, int num_processes, int time_quantum){
+    Process Ready_list[MAX_PROCESS];
+    
+    int current_time = 0;
+    int total_turnaround_time = 0;
+    int total_waiting_time = 0;
+    int working_pid = 0;
+    int idle_time = 0;
+    int count = 0;
+
+    printf("Priority with Preemptive is starting.\n");
+    printf("Gantt chart: \n");
+    
+    while(count > 0 || !is_empty_list(processes, num_processes)){
+        int highest_idx = -1;
+        int highest_priority = 0;
+
+        whocaninsert_list(Ready_list, processes, num_processes, current_time, &count);
+
+        if(count == 0){
+            current_time++;
+            idle_time++;
+            working_pid = 0;
+            continue;
+        }else{
+            for(int i = 0; i < count; i++){
+                if(Ready_list[i].Priority > highest_priority){
+                    highest_idx = i;
+                    highest_priority = Ready_list[i].Priority;
+                }
+            }
+
+            if(idle_time > 0){
+                printf("| Pidle (%d) |", current_time);
+                idle_time = 0;
+                working_pid = 0;
+            }
+            
+            if(Ready_list[highest_idx].Remaing_time == 1){
+                Ready_list[highest_idx].Remaing_time--;
+                Ready_list[highest_idx].Waiting_time += current_time - Ready_list[highest_idx].Last_excuted_time;
+                current_time++;
+                Ready_list[highest_idx].Turnaround_time = current_time - Ready_list[highest_idx].Arrival_time;
+
+                total_turnaround_time += Ready_list[highest_idx].Turnaround_time;
+                total_waiting_time += Ready_list[highest_idx].Waiting_time;
+
+                printf("| P%d (%d) |", Ready_list[highest_idx].PID, current_time);
+                
+                working_pid = 0;
+
+                remove_from_list(Ready_list, &count, highest_idx);
+            }else{
+                if(working_pid != Ready_list[highest_idx].PID && working_pid != 0){
+                    printf("| P%d (%d) |", working_pid, current_time);
+                    working_pid = Ready_list[highest_idx].PID;
+                }
+                Ready_list[highest_idx].Remaing_time--;
+                Ready_list[highest_idx].Waiting_time += current_time - Ready_list[highest_idx].Last_excuted_time;
+                current_time++;
+                Ready_list[highest_idx].Last_excuted_time = current_time;
+                working_pid = Ready_list[highest_idx].PID;
+            }
+        }
+    }
+    
+    printf("\n");
+    printf("Average Waiting Time is %f\n", (float)total_waiting_time / num_processes);
+    printf("Average Turnaround Time is %f\n", (float)total_turnaround_time / num_processes);
+    printf("Priority with Preemptive has finished.\n");
+    printf("\n"); 
 }
 
 int main(){
@@ -279,10 +530,11 @@ int main(){
     Process processes[MAX_PROCESS];
     Queue Ready_queue, Waiting_queue;
     int num_processes;
+    int time_quantum;
 
     Config(&Ready_queue, &Waiting_queue);
 
-    printf("How many process would you like to create? (Maximum %d)", MAX_PROCESS);
+    printf("How many process would you like to create? (Maximum %d): ", MAX_PROCESS);
     scanf("%d", &num_processes); // 생성할 프로세스 갯수 입력.
     printf("\n");
 
@@ -294,20 +546,66 @@ int main(){
     printf("All processes created!\n");
     printf("\n");
 
-    FCFS(&Ready_queue, num_processes);
+    int number = -1;
 
-    Init_queue(&Ready_queue);
-    for(int i = 0; i < num_processes; i++){
-        Enqueue(&Ready_queue, processes[i]);
+    while(1){
+        printf("1-FCFS\n");
+        printf("2-SJF\n");
+        printf("3-Priority\n");
+        printf("4-RR\n");
+        printf("5-SJF with Priority\n");
+        printf("6-Priority with Preemptive\n");
+        printf("0-EXIT\n");
+        printf("Which one do want? ");
+        scanf("%d", &number);
+        printf("\n");
+
+        if(number == 0){
+            printf("Scheduling done.\n");
+            break;
+        }
+
+        for(int i = 0; i < num_processes; i++){ // 각 프로세스의 insert값 초기화.
+            processes[i].Insert = 0;
+        }
+
+        Init_queue(&Ready_queue); // Ready queue 초기화.
+
+        if(number == 1 || number == 2 || number == 3){
+            for(int i = 0; i < num_processes; i++){ // Ready queue에 프로세스들 삽입.
+                Enqueue(&Ready_queue, processes[i]);
+            }
+        }
+
+        switch (number){
+        case 1:
+            FCFS(&Ready_queue, num_processes);
+            break;
+        case 2:
+            SJF(&Ready_queue, num_processes);
+            break;
+        case 3:
+            Priority(&Ready_queue, num_processes);
+            break;
+        case 4:
+            printf("Input time quantum: ");
+            scanf("%d", &time_quantum);
+            printf("\n");
+            RR(&Ready_queue, processes, num_processes, time_quantum);
+            break;
+        case 5:
+            time_quantum = 1;
+            SJFwithPreemptive(processes, num_processes, time_quantum);
+            break;
+        case 6:
+            time_quantum = 1;
+            PrioritywithPreemptive(processes, num_processes, time_quantum);
+            break;
+        default:
+            printf("I don't have that number...");
+            break;
+        }
     }
-    SJF(&Ready_queue, num_processes);
-
-    Priority(&Ready_queue, num_processes);
-
-    int time_quantum;
-    printf("Input time quantum: ");
-    scanf("%d", &time_quantum);
-    RR();
 
     return 0;
 }
